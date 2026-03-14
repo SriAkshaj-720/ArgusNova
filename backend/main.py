@@ -126,11 +126,9 @@ async def log_injector():
             live_events = get_live_network_events()
             for event in live_events:
                 await process_event(event)
-            bg_event = generate_background_event()
-            await process_event(bg_event)
         except Exception as e:
             print("Injector error:", e)
-        await asyncio.sleep(4)
+        await asyncio.sleep(2)
 
 
 @app.on_event("startup")

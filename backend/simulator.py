@@ -1,52 +1,40 @@
-import random
 import uuid
-import psutil
 from datetime import datetime
-
-ATTACK_TYPES = ["brute_force", "port_scan", "sql_injection", "ddos", "privilege_escalation"]
-NORMAL_USERS = ["alice", "bob", "carol", "dave", "system"]
-MALICIOUS_IPS = ["192.168.1.103", "10.0.0.254", "172.16.0.99"]
 
 
 def get_live_network_events():
     events = []
     try:
+        import psutil
         connections = psutil.net_connections(kind="inet")
         net_stats = psutil.net_io_counters()
-        for conn in connections[:3]:
-            if conn.raddr and conn.status == "ESTABLISHED":
-                events.append({
-                    "id": str(uuid.uuid4()),
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "source_ip": str(conn.raddr.ip),
-                    "destination_port": conn.laddr.port if conn.laddr else 0,
-                    "event_type": "live_connection",
-                    "failed_attempts": 0,
-                    "bytes_transferred": int(net_stats.bytes_recv),
-                    "ports_scanned": 0,
-                    "user": "system",
-                    "data_source": "LIVE"
-                })
-    except Exception:
-        pass
+        seen = set()
+        for conn in connections:
+            if conn.raddr and conn.status in ["ESTABLISHED", "SYN_RECV", "CLOSE_WAIT", "TIME_WAIT"]:
+                key = "{}:{}".format(conn.raddr.ip, conn.laddr.port if conn.laddr else 0)
+                if key not in seen:
+                    seen.add(key)
+                    remote_ip = str(conn.raddr.ip)
+                    port = conn.laddr.port if conn.laddr else 0
+                    events.append({
+                        "id": str(uuid.uuid4()),
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "source_ip": remote_ip,
+                        "destination_port": port,
+                        "event_type": "live_connection",
+                        "failed_attempts": 0,
+                        "bytes_transferred": int(net_stats.bytes_recv),
+                        "ports_scanned": 0,
+                        "user": "system",
+                        "data_source": "LIVE"
+                    })
+    except Exception as e:
+        print("Live monitor error:", e)
     return events
 
 
 def generate_background_event():
-    is_attack = random.random() < 0.25
-    return {
-        "id": str(uuid.uuid4()),
-        "timestamp": datetime.utcnow().isoformat(),
-        "source_ip": random.choice(MALICIOUS_IPS) if is_attack else "10.0.{}.{}".format(
-            random.randint(1, 50), random.randint(1, 200)),
-        "destination_port": random.choice([22, 3306, 5432, 80, 443]),
-        "event_type": random.choice(ATTACK_TYPES) if is_attack else "normal_access",
-        "failed_attempts": random.randint(50, 200) if is_attack else random.randint(0, 2),
-        "bytes_transferred": random.randint(100000, 5000000) if is_attack else random.randint(100, 5000),
-        "ports_scanned": random.randint(500, 1500) if is_attack and random.random() < 0.3 else 0,
-        "user": random.choice(NORMAL_USERS),
-        "data_source": "SIMULATED"
-    }
+    return None
 
 
 def generate_attack_scenario():
