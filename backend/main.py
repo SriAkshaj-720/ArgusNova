@@ -70,21 +70,54 @@ async def broadcast(payload: dict):
 
 
 async def process_event(event: dict):
-    memory.record_event(event)
-    votes = await asyncio.gather(
-        run_agent("paranoid", PARANOID, event),
-        run_agent("skeptic", SKEPTIC, event),
-        run_agent("pattern_matcher", PATTERN, event),
-        run_agent("narrator", NARRATOR, event),
-    )
-    verdict = await arbiter.resolve(list(votes), event)
-    verdict["event"] = event
-    verdict["id"] = event.get("id", "")
-    verdict["timestamp"] = event.get("timestamp", "")
-    if verdict["final_severity"] == "critical":
-        retro = await retroactive_scan(event)
-        verdict["retroactive_analysis"] = retro
-    await broadcast(verdict)
+    try:
+        memory.record_event(event)
+
+        event_type = event.get("event_type", "")
+        forced_severity = None
+        if event_type == "data_exfiltration":
+            forced_severity = "critical"
+        elif event_type == "privilege_escalation":
+            forced_severity = "critical"
+        elif event_type == "brute_force":
+            forced_severity = "high"
+        elif event_type == "port_scan":
+            forced_severity = "medium"
+        elif event_type == "ddos":
+            forced_severity = "high"
+        elif event_type == "sql_injection":
+            forced_severity = "high"
+        elif event_type == "normal_access" or event_type == "live_connection":
+            forced_severity = "clean"
+
+        votes = await asyncio.gather(
+            run_agent("paranoid", PARANOID, event),
+            run_agent("skeptic", SKEPTIC, event),
+            run_agent("pattern_matcher", PATTERN, event),
+            run_agent("narrator", NARRATOR, event),
+        )
+
+        verdict = await arbiter.resolve(list(votes), event)
+
+        if forced_severity:
+            verdict["final_severity"] = forced_severity
+
+        verdict["event"] = event
+        verdict["id"] = event.get("id", "")
+        verdict["timestamp"] = event.get("timestamp", "")
+
+        if verdict.get("final_severity") == "critical":
+            try:
+                retro = await retroactive_scan(event)
+                verdict["retroactive_analysis"] = retro
+            except Exception as e:
+                print("Retroactive error:", e)
+
+        await broadcast(verdict)
+        print("Event processed: {} -> {}".format(
+            event.get("event_type"), verdict.get("final_severity")))
+    except Exception as e:
+        print("process_event error:", e)
 
 
 async def log_injector():
