@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 
+
 class SuspicionMemory:
     def __init__(self):
         self.ip_scores = defaultdict(list)
@@ -9,10 +10,7 @@ class SuspicionMemory:
         self.confirmed_threats = []
 
     def record_event(self, event: dict):
-        self.event_log.append({
-            **event,
-            "received_at": datetime.utcnow().isoformat()
-        })
+        self.event_log.append({**event, "received_at": datetime.utcnow().isoformat()})
         if len(self.event_log) > 500:
             self.event_log = self.event_log[-500:]
 
@@ -41,5 +39,6 @@ class SuspicionMemory:
 
     def get_recent_events_for_ip(self, ip: str, n: int = 50) -> list:
         return [e for e in self.event_log if e.get("source_ip") == ip][-n:]
+
 
 memory = SuspicionMemory()
