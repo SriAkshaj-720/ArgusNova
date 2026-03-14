@@ -17,22 +17,22 @@ class SuspicionMemory:
     def update_suspicion(self, entity_type: str, entity_id: str, delta: float, reason: str):
         store = self.ip_scores if entity_type == "ip" else self.user_scores
         store[entity_id].append({
-            "delta": delta,
-            "reason": reason,
+            "delta": float(delta),
+            "reason": str(reason),
             "timestamp": datetime.utcnow().isoformat()
         })
 
     def get_suspicion_context(self, ip: str, user: str) -> dict:
-        ip_history = self.ip_scores.get(ip, [])
-        user_history = self.user_scores.get(user, [])
+        ip_history = list(self.ip_scores.get(ip, []))
+        user_history = list(self.user_scores.get(user, []))
         ip_score = sum(h["delta"] for h in ip_history[-10:])
         user_score = sum(h["delta"] for h in user_history[-10:])
         return {
             "ip": ip,
-            "ip_cumulative_suspicion": round(ip_score, 2),
+            "ip_cumulative_suspicion": round(float(ip_score), 2),
             "ip_recent_reasons": [h["reason"] for h in ip_history[-3:]],
             "user": user,
-            "user_cumulative_suspicion": round(user_score, 2),
+            "user_cumulative_suspicion": round(float(user_score), 2),
             "user_recent_reasons": [h["reason"] for h in user_history[-3:]],
             "ip_event_count_today": len(ip_history)
         }

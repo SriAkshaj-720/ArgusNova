@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArgusNova — Cognitive SOC</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060810;--bg2:#0A0D17;--surface:#0F1422;--surface2:#141828;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);
+  --text:#DDE1F0;--muted:#4A5068;--dim:#2A3050;
+  --green:#00E5A0;--green-bg:rgba(0,229,160,0.08);--green-border:rgba(0,229,160,0.25);
+  --orange:#FF6B35;--orange-bg:rgba(255,107,53,0.08);--orange-border:rgba(255,107,53,0.25);
+  --blue:#4D9EFF;--blue-bg:rgba(77,158,255,0.08);--blue-border:rgba(77,158,255,0.25);
+  --yellow:#FFB800;--yellow-bg:rgba(255,184,0,0.08);--yellow-border:rgba(255,184,0,0.25);
+  --red:#FF3B5C;--red-bg:rgba(255,59,92,0.08);--red-border:rgba(255,59,92,0.3);
+  --purple:#A78BFA;--purple-bg:rgba(167,139,250,0.08);
+  --font-display:'Syne',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+html,body{width:100%;min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font-display);overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:1000}
+
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:0.5px solid var(--border);position:sticky;top:0;background:rgba(6,8,16,0.95);backdrop-filter:blur(20px);z-index:100}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;border:1.5px solid var(--green);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.logo-mark::before{content:'';width:14px;height:14px;background:var(--green);clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);opacity:0.9}
+.logo-text{font-size:18px;font-weight:800;letter-spacing:-0.02em}
+.logo-text span{color:var(--green)}
+.header-status{display:flex;align-items:center;gap:12px}
+.status-pill{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--muted);background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:5px 12px}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+.pulse.red{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,229,160,0.4)}50%{opacity:0.8;box-shadow:0 0 0 4px rgba(0,229,160,0)}}
+.btn-demo{background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 20px;font-family:var(--font-mono);font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.05em;transition:all 0.2s}
+.btn-demo:hover{background:#ff1a3d;transform:scale(1.02)}
+.btn-demo:disabled{background:var(--dim);cursor:not-allowed;transform:none}
+.conn-indicator{font-family:var(--font-mono);font-size:10px;padding:3px 8px;border-radius:3px}
+.conn-ok{background:var(--green-bg);color:var(--green)}
+.conn-err{background:var(--red-bg);color:var(--red)}
+.conn-wait{background:var(--yellow-bg);color:var(--yellow)}
+
+.stats-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border-bottom:0.5px solid var(--border)}
+.stat{background:var(--bg);padding:14px 20px;text-align:center}
+.stat-num{font-family:var(--font-mono);font-size:24px;font-weight:700;line-height:1}
+.stat-label{font-size:10px;color:var(--muted);margin-top:4px;letter-spacing:0.08em;text-transform:uppercase}
+
+.main{display:grid;grid-template-columns:1fr 380px;height:calc(100vh - 105px)}
+.feed{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.feed::-webkit-scrollbar{width:4px}
+.feed::-webkit-scrollbar-track{background:transparent}
+.feed::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+
+.incident{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;overflow:hidden;animation:slideIn 0.4s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+.incident-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid var(--border)}
+.incident-left{display:flex;align-items:center;gap:10px}
+.sev-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;letter-spacing:0.06em}
+.sev-critical{background:var(--red-bg);color:var(--red);border:0.5px solid var(--red-border)}
+.sev-high{background:var(--orange-bg);color:var(--orange);border:0.5px solid var(--orange-border)}
+.sev-medium{background:var(--yellow-bg);color:var(--yellow);border:0.5px solid var(--yellow-border)}
+.sev-low{background:var(--blue-bg);color:var(--blue);border:0.5px solid var(--blue-border)}
+.sev-clean{background:var(--surface2);color:var(--muted);border:0.5px solid var(--border)}
+.incident-type{font-size:13px;font-weight:600}
+.incident-meta{font-family:var(--font-mono);font-size:10px;color:var(--muted);display:flex;align-items:center;gap:12px}
+.source-badge{font-family:var(--font-mono);font-size:9px;padding:2px 7px;border-radius:3px;font-weight:600}
+.src-live{background:var(--green-bg);color:var(--green)}
+.src-sim{background:var(--yellow-bg);color:var(--yellow)}
+.src-attack{background:var(--red-bg);color:var(--red);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.5}}
+
+.incident-body{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.narrative{font-size:12px;color:var(--text);line-height:1.6;font-style:italic;padding:8px 12px;background:var(--surface2);border-radius:6px;border-left:2px solid var(--purple)}
+.kill-chain{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;color:var(--muted);flex-wrap:wrap}
+.kc-stage{padding:2px 8px;border-radius:3px;background:var(--surface2);border:0.5px solid var(--border2)}
+.kc-stage.active{background:var(--purple-bg);color:var(--purple);border-color:rgba(167,139,250,0.3)}
+
+.votes-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.vote-card{background:var(--surface2);border:0.5px solid var(--border);border-radius:8px;padding:8px 10px}
+.vote-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.agent-name{font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em}
+.vote-sev{font-family:var(--font-mono);font-size:10px;font-weight:700}
+.vote-reason{font-size:11px;color:var(--muted);line-height:1.4}
+.weight-bar{height:2px;background:var(--dim);border-radius:1px;margin-top:6px;overflow:hidden}
+.weight-fill{height:100%;border-radius:1px;background:var(--green)}
+
+.debated-banner{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--orange-bg);border:0.5px solid var(--orange-border);border-radius:6px;font-size:11px;color:var(--orange)}
+.retro-panel{padding:10px 12px;background:rgba(255,59,92,0.05);border:0.5px solid rgba(255,59,92,0.2);border-radius:8px}
+.retro-title{font-family:var(--font-mono);font-size:10px;color:var(--red);font-weight:700;margin-bottom:6px;letter-spacing:0.06em}
+.retro-text{font-size:11px;color:var(--muted);line-height:1.5}
+
+.sidebar{border-left:0.5px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-section{padding:14px 16px;border-bottom:0.5px solid var(--border)}
+.sidebar-title{font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px}
+
+.kc-tracker{display:flex;flex-direction:column;gap:4px}
+.kc-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;font-size:12px;transition:all 0.3s}
+.kc-row.reached{background:var(--red-bg);color:var(--red)}
+.kc-row.current{background:var(--orange-bg);color:var(--orange);font-weight:600}
+.kc-row.pending{color:var(--muted)}
+.kc-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+.ip-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto}
+.ip-row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surface2);border-radius:6px;font-family:var(--font-mono);font-size:11px}
+.ip-score.low{color:var(--green)}
+.ip-score.med{color:var(--yellow)}
+.ip-score.high{color:var(--orange)}
+.ip-score.crit{color:var(--red)}
+
+.event-log{flex:1;overflow-y:auto;padding:10px}
+.event-log::-webkit-scrollbar{width:3px}
+.event-log::-webkit-scrollbar-thumb{background:var(--dim)}
+.log-entry{font-family:var(--font-mono);font-size:10px;color:var(--muted);padding:3px 0;border-bottom:0.5px solid rgba(255,255,255,0.03);display:flex;gap:8px}
+.log-time{color:var(--dim);flex-shrink:0}
+.log-ip{color:var(--blue);flex-shrink:0}
+.log-type{flex:1}
+.log-type.attack{color:var(--orange)}
+.log-type.critical{color:var(--red);font-weight:700}
+.log-type.live{color:var(--green)}
+
+.dna-counter{display:flex;align-items:center;justify-content:space-between}
+.dna-num{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--green)}
+.dna-patterns{display:flex;flex-direction:column;gap:3px;max-height:80px;overflow:hidden}
+.dna-item{font-size:10px;color:var(--muted);font-family:var(--font-mono);padding:2px 6px;background:var(--green-bg);border-radius:3px}
+
+.agent-weights{display:flex;flex-direction:column;gap:6px}
+.aw-row{display:flex;align-items:center;gap:8px}
+.aw-name{font-family:var(--font-mono);font-size:10px;color:var(--muted);width:100px;flex-shrink:0}
+.aw-track{flex:1;height:4px;background:var(--dim);border-radius:2px;overflow:hidden}
+.aw-fill{height:100%;border-radius:2px;background:var(--blue);transition:width 1s ease}
+.aw-val{font-family:var(--font-mono);font-size:10px;color:var(--blue);width:32px;text-align:right}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--muted);font-size:13px;gap:8px}
+.empty-icon{width:40px;height:40px;border:1.5px solid var(--dim);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div class="logo-text">ARGUS<span>NOVA</span></div>
+  </div>
+  <div class="header-status">
+    <div class="status-pill"><div class="pulse" id="pulse-dot"></div><span id="status-text">CONNECTING...</span></div>
+    <div class="status-pill" id="event-counter">Events: 0</div>
+    <span class="conn-indicator conn-wait" id="conn-badge">CONNECTING</span>
+    <button class="btn-demo" id="demo-btn" onclick="runDemo()">TRIGGER ATTACK DEMO</button>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-num" style="color:var(--red)" id="s-critical">0</div><div class="stat-label">Critical</div></div>
+  <div class="stat"><div class="stat-num" style="color:var(--orange)" id="s-high">0</div><div class="stat-label">High</div></div>
+  <div class="stat"><div class="stat-num" style="color:var(--yellow)" id="s-medium">0</div><div class="stat-label">Medium</div></div>
+  <div class="stat"><div class="stat-num" style="color:var(--green)" id="s-clean">0</div><div class="stat-label">Clean</div></div>
+  <div class="stat"><div class="stat-num" style="color:var(--blue)" id="s-total">0</div><div class="stat-label">Total</div></div>
+</div>
+
+<div class="main">
+  <div class="feed" id="feed">
+    <div class="empty" id="empty-state">
+      <div class="empty-icon">◈</div>
+      <div>Waiting for events...</div>
+      <div style="font-size:11px;color:var(--dim)">Connecting to ArgusNova backend...</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Kill Chain Tracker</div>
+      <div class="kc-tracker">
+        <div class="kc-row pending" id="kc-reconnaissance"><div class="kc-dot"></div>Reconnaissance</div>
+        <div class="kc-row pending" id="kc-weaponization"><div class="kc-dot"></div>Weaponization</div>
+        <div class="kc-row pending" id="kc-delivery"><div class="kc-dot"></div>Delivery</div>
+        <div class="kc-row pending" id="kc-exploitation"><div class="kc-dot"></div>Exploitation</div>
+        <div class="kc-row pending" id="kc-persistence"><div class="kc-dot"></div>Persistence</div>
+        <div class="kc-row pending" id="kc-exfiltration"><div class="kc-dot"></div>Exfiltration</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Suspicious IPs</div>
+      <div class="ip-list" id="ip-list"><div style="font-size:11px;color:var(--dim);padding:4px">No suspicious IPs yet</div></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Threat DNA Library</div>
+      <div class="dna-counter">
+        <div>
+          <div class="dna-num" id="dna-count">4</div>
+          <div style="font-size:10px;color:var(--muted)">patterns stored</div>
+        </div>
+        <div class="dna-patterns" id="dna-patterns">
+          <div class="dna-item">SSH brute force</div>
+          <div class="dna-item">Nmap full scan</div>
+          <div class="dna-item">Large exfil HTTPS</div>
+          <div class="dna-item">Privilege escalation</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Agent Trust Weights</div>
+      <div class="agent-weights" id="agent-weights">
+        <div class="aw-row"><div class="aw-name">Paranoid</div><div class="aw-track"><div class="aw-fill" id="w-paranoid" style="width:60%"></div></div><div class="aw-val" id="wv-paranoid">0.60</div></div>
+        <div class="aw-row"><div class="aw-name">Skeptic</div><div class="aw-track"><div class="aw-fill" id="w-skeptic" style="width:80%"></div></div><div class="aw-val" id="wv-skeptic">0.80</div></div>
+        <div class="aw-row"><div class="aw-name">Pattern</div><div class="aw-track"><div class="aw-fill" id="w-pattern" style="width:80%"></div></div><div class="aw-val" id="wv-pattern">0.80</div></div>
+        <div class="aw-row"><div class="aw-name">Narrator</div><div class="aw-track"><div class="aw-fill" id="w-narrator" style="width:60%"></div></div><div class="aw-val" id="wv-narrator">0.60</div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="sidebar-title">Live Event Log</div>
+      <div class="event-log" id="event-log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BACKEND = 'http://localhost:8000';
+const WS_URL  = 'ws://localhost:8000/ws';
+
+let stats = {critical:0,high:0,medium:0,clean:0,total:0};
+let ipScores = {};
+let kcReached = [];
+let ws = null;
+let reconnectTimer = null;
+
+function ts() {
+  return new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function setConnStatus(state) {
+  const badge = document.getElementById('conn-badge');
+  const pulse = document.getElementById('pulse-dot');
+  const statusText = document.getElementById('status-text');
+  if(state === 'connected') {
+    badge.className = 'conn-indicator conn-ok';
+    badge.textContent = 'CONNECTED';
+    pulse.className = 'pulse';
+    statusText.textContent = 'MONITORING LIVE';
+  } else if(state === 'error') {
+    badge.className = 'conn-indicator conn-err';
+    badge.textContent = 'DISCONNECTED';
+    pulse.className = 'pulse red';
+    statusText.textContent = 'CONNECTION LOST';
+  } else {
+    badge.className = 'conn-indicator conn-wait';
+    badge.textContent = 'CONNECTING';
+    statusText.textContent = 'CONNECTING...';
+  }
+}
+
+function connectWS() {
+  try {
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => {
+      setConnStatus('connected');
+      if(reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    };
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        handleIncident(data);
+      } catch(err) { console.error('Parse error', err); }
+    };
+    ws.onclose = () => {
+      setConnStatus('error');
+      reconnectTimer = setTimeout(connectWS, 3000);
+    };
+    ws.onerror = () => {
+      setConnStatus('error');
+    };
+  } catch(e) {
+    setConnStatus('error');
+    reconnectTimer = setTimeout(connectWS, 3000);
+  }
+}
+
+function handleIncident(data) {
+  const empty = document.getElementById('empty-state');
+  if(empty) empty.remove();
+
+  const sev = data.final_severity || 'clean';
+  const event = data.event || {};
+  const ip = event.source_ip || 'unknown';
+  const eventType = event.event_type || 'unknown';
+  const dataSource = event.data_source || 'SIMULATED';
+  const votes = data.agent_votes || [];
+  const narrative = data.attack_narrative || '';
+  const stage = data.kill_chain_stage || '';
+  const debated = data.was_debated || false;
+  const arbitrationNote = data.arbitration_note || '';
+  const retro = data.retroactive_analysis || null;
+  const agentWeights = data.agent_weights || null;
+
+  updateStats(sev);
+  addLogEntry(ip, eventType, sev === 'critical', dataSource === 'LIVE');
+  updateIPScoreFromVotes(ip, votes);
+  if(stage) updateKillChain(stage);
+  if(agentWeights) updateWeightDisplay(agentWeights);
+  if(sev === 'critical' && retro) updateDNA(event);
+
+  renderIncident({sev, ip, eventType, dataSource, votes, narrative, stage, debated, arbitrationNote, retro});
+
+  document.getElementById('event-counter').textContent = 'Events: ' + stats.total;
+}
+
+function updateStats(sev) {
+  stats.total++;
+  if(sev==='critical') stats.critical++;
+  else if(sev==='high') stats.high++;
+  else if(sev==='medium') stats.medium++;
+  else stats.clean++;
+  document.getElementById('s-critical').textContent = stats.critical;
+  document.getElementById('s-high').textContent = stats.high;
+  document.getElementById('s-medium').textContent = stats.medium;
+  document.getElementById('s-clean').textContent = stats.clean;
+  document.getElementById('s-total').textContent = stats.total;
+}
+
+function updateIPScoreFromVotes(ip, votes) {
+  if(!ip || ip === 'unknown') return;
+  const totalDelta = votes.reduce((sum, v) => sum + (v.suspicion_delta || 0), 0) / Math.max(votes.length, 1);
+  if(!ipScores[ip]) ipScores[ip] = 0;
+  ipScores[ip] = Math.round((ipScores[ip] + totalDelta) * 10) / 10;
+  const list = document.getElementById('ip-list');
+  list.innerHTML = '';
+  const sorted = Object.entries(ipScores).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if(sorted.length === 0) {
+    list.innerHTML = '<div style="font-size:11px;color:var(--dim);padding:4px">No suspicious IPs yet</div>';
+    return;
+  }
+  sorted.forEach(([ip, score]) => {
+    const cls = score > 3 ? 'crit' : score > 2 ? 'high' : score > 1 ? 'med' : 'low';
+    list.innerHTML += '<div class="ip-row"><span style="color:var(--blue)">' + ip + '</span><span class="ip-score ' + cls + '">' + score.toFixed(1) + '</span></div>';
+  });
+}
+
+function updateKillChain(stage) {
+  if(!stage || stage === 'unknown' || kcReached.includes(stage)) return;
+  kcReached.push(stage);
+  document.querySelectorAll('.kc-row').forEach(el => {
+    el.classList.remove('current', 'reached');
+    el.classList.add('pending');
+  });
+  kcReached.forEach((s, i) => {
+    const el = document.getElementById('kc-' + s);
+    if(!el) return;
+    el.classList.remove('pending');
+    if(i === kcReached.length - 1) el.classList.add('current');
+    else el.classList.add('reached');
+  });
+}
+
+function updateWeightDisplay(weights) {
+  const map = {paranoid:'paranoid', skeptic:'skeptic', pattern_matcher:'pattern', narrator:'narrator'};
+  for(const [key, val] of Object.entries(weights)) {
+    const id = map[key];
+    if(!id) continue;
+    const pct = Math.round(val * 100);
+    const fill = document.getElementById('w-' + id);
+    const label = document.getElementById('wv-' + id);
+    if(fill) fill.style.width = pct + '%';
+    if(label) label.textContent = val.toFixed(2);
+  }
+}
+
+function updateDNA(event) {
+  const count = parseInt(document.getElementById('dna-count').textContent) + 1;
+  document.getElementById('dna-count').textContent = count;
+  const p = document.getElementById('dna-patterns');
+  const item = document.createElement('div');
+  item.className = 'dna-item';
+  item.style.color = 'var(--red)';
+  item.textContent = '★ Auto: ' + (event.event_type || 'unknown').replace(/_/g,' ');
+  p.insertBefore(item, p.firstChild);
+}
+
+function addLogEntry(ip, type, isCritical, isLive) {
+  const log = document.getElementById('event-log');
+  const cls = isCritical ? 'critical' : isLive ? 'live' : (type !== 'normal_access' && type !== 'live_connection') ? 'attack' : '';
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = '<span class="log-time">' + ts() + '</span><span class="log-ip">' + ip + '</span><span class="log-type ' + cls + '">' + type.replace(/_/g,' ') + '</span>';
+  log.insertBefore(entry, log.firstChild);
+  while(log.children.length > 60) log.removeChild(log.lastChild);
+}
+
+function sevColor(s) {
+  if(s==='critical') return 'var(--red)';
+  if(s==='high') return 'var(--orange)';
+  if(s==='medium') return 'var(--yellow)';
+  if(s==='low') return 'var(--blue)';
+  return 'var(--muted)';
+}
+
+function makeVoteCard(vote) {
+  const name = vote.agent || 'agent';
+  const sev = vote.vote || 'clean';
+  const conf = vote.confidence || 0.5;
+  const reasoning = vote.reasoning || vote.attack_narrative || '';
+  const weight = vote.weight || 0.6;
+  const pct = Math.round(weight * 100);
+  const display = reasoning.length > 80 ? reasoning.slice(0,80) + '...' : reasoning;
+  return '<div class="vote-card">' +
+    '<div class="vote-header">' +
+      '<span class="agent-name">' + name + '</span>' +
+      '<span class="vote-sev" style="color:' + sevColor(sev) + '">' + sev.toUpperCase() + '</span>' +
+    '</div>' +
+    '<div class="vote-reason">' + display + '</div>' +
+    '<div class="weight-bar"><div class="weight-fill" style="width:' + pct + '%"></div></div>' +
+  '</div>';
+}
+
+function renderIncident(d) {
+  const {sev, ip, eventType, dataSource, votes, narrative, stage, debated, arbitrationNote, retro} = d;
+  const srcCls = dataSource === 'LIVE' ? 'src-live' : dataSource === 'LIVE_ATTACK' ? 'src-attack' : 'src-sim';
+  const sevCls = 'sev-' + (sev || 'clean');
+  const stages = ['reconnaissance','weaponization','delivery','exploitation','persistence','exfiltration'];
+
+  let html = '<div class="incident">';
+  html += '<div class="incident-header">';
+  html += '<div class="incident-left">';
+  html += '<span class="sev-badge ' + sevCls + '">' + (sev||'clean').toUpperCase() + '</span>';
+  html += '<span class="incident-type">' + (eventType||'unknown').replace(/_/g,' ') + ' — ' + ip + '</span>';
+  html += '</div>';
+  html += '<div class="incident-meta">';
+  html += '<span class="source-badge ' + srcCls + '">' + (dataSource||'SIM') + '</span>';
+  html += '<span>' + ts() + '</span>';
+  if(stage && stage !== 'unknown') html += '<span style="color:var(--purple);font-size:9px">' + stage + '</span>';
+  html += '</div></div>';
+
+  html += '<div class="incident-body">';
+
+  if(narrative) {
+    html += '<div class="narrative">' + narrative + '</div>';
+  }
+
+  if(stage && stage !== 'unknown') {
+    html += '<div class="kill-chain">';
+    stages.forEach(s => {
+      const isActive = kcReached.includes(s) || s === stage;
+      html += '<span class="kc-stage' + (isActive?' active':'') + '">' + s.slice(0,5) + '</span>';
+    });
+    html += '</div>';
+  }
+
+  if(votes && votes.length > 0) {
+    html += '<div class="votes-grid">';
+    votes.forEach(v => { html += makeVoteCard(v); });
+    html += '</div>';
+  }
+
+  if(debated) {
+    html += '<div class="debated-banner">⚖ AGENTS DEBATED — ' + (arbitrationNote || 'CISO arbitration triggered') + '</div>';
+  }
+
+  if(retro && retro.attack_timeline) {
+    html += '<div class="retro-panel">';
+    html += '<div class="retro-title">◀ RETROACTIVE ANALYSIS — PATIENT ZERO IDENTIFIED</div>';
+    html += '<div class="retro-text">';
+    if(retro.attack_timeline) html += '<strong>Timeline:</strong> ' + retro.attack_timeline + '<br>';
+    if(retro.missed_because) html += '<strong>Missed because:</strong> ' + retro.missed_because;
+    html += '</div></div>';
+  }
+
+  html += '</div></div>';
+
+  const feed = document.getElementById('feed');
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  feed.insertBefore(div.firstChild, feed.firstChild);
+  while(feed.children.length > 30) feed.removeChild(feed.lastChild);
+}
+
+async function runDemo() {
+  const btn = document.getElementById('demo-btn');
+  btn.disabled = true;
+  btn.textContent = 'ATTACK RUNNING...';
+  document.getElementById('status-text').textContent = 'ATTACK IN PROGRESS';
+  document.getElementById('pulse-dot').className = 'pulse red';
+
+  try {
+    await fetch(BACKEND + '/demo', {method:'POST'});
+  } catch(e) {
+    console.error('Demo trigger failed', e);
+  }
+
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = 'TRIGGER ATTACK DEMO';
+    document.getElementById('status-text').textContent = 'MONITORING LIVE';
+    document.getElementById('pulse-dot').className = 'pulse';
+  }, 25000);
+}
+
+connectWS();
+</script>
+</body>
+</html>
